@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FLUY</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
+background:linear-gradient(180deg,#140021,#000);
+color:white;
+overflow:hidden;
+}
+.app{
+max-width:480px;
+margin:auto;
+height:100vh;
+display:flex;
+flex-direction:column;
+position:relative;
+}
+header{
+padding:20px;
+text-align:center;
+background:linear-gradient(135deg,#6d28d9,#9333ea);
+}
+.logo{
+font-size:26px;
+font-weight:800;
+letter-spacing:3px;
+}
+.month-select{
+margin-top:8px;
+background:rgba(255,255,255,0.15);
+border:none;
+padding:6px 12px;
+border-radius:20px;
+color:white;
+}
+.wrapper{
+flex:1;
+display:flex;
+width:200%;
+transition:transform .4s cubic-bezier(.25,.8,.25,1);
+}
+.screen{
+width:50%;
+padding:20px;
+overflow-y:auto;
+position:relative;
+}
+.back{
+position:absolute;
+top:10px;
+left:10px;
+font-size:22px;
+background:none;
+border:none;
+color:white;
+}
+.card{
+background:rgba(255,255,255,0.05);
+padding:15px;
+border-radius:16px;
+margin-bottom:12px;
+}
+.balance{
+background:linear-gradient(135deg,#6d28d9,#9333ea);
+}
+.category-grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:10px;
+margin-bottom:15px;
+}
+.category-btn{
+padding:12px;
+border-radius:14px;
+border:1px solid rgba(168,85,247,0.4);
+background:rgba(255,255,255,0.05);
+color:white;
+font-size:12px;
+transition:.2s;
+}
+.category-btn.active{
+background:linear-gradient(135deg,#6d28d9,#9333ea);
+}
+input{
+width:100%;
+padding:14px;
+margin-bottom:15px;
+border-radius:14px;
+border:none;
+background:rgba(255,255,255,0.05);
+color:white;
+}
+.save{
+background:linear-gradient(135deg,#6d28d9,#9333ea);
+border:none;
+padding:14px;
+border-radius:14px;
+color:white;
+font-weight:600;
+width:100%;
+}
+.fab{
+position:absolute;
+bottom:90px;
+left:50%;
+transform:translateX(-50%);
+padding:16px 28px;
+border-radius:40px;
+border:none;
+font-size:16px;
+font-weight:600;
+background:linear-gradient(135deg,#9333ea,#6d28d9);
+color:white;
+box-shadow:0 0 30px rgba(147,51,234,.8);
+}
+.fab-menu{
+position:absolute;
+bottom:160px;
+left:50%;
+transform:translateX(-50%) scale(0);
+transition:.3s;
+display:flex;
+flex-direction:column;
+gap:10px;
+}
+.fab-menu.active{
+transform:translateX(-50%) scale(1);
+}
+.fab-option{
+background:rgba(0,0,0,.8);
+padding:12px 20px;
+border-radius:30px;
+border:1px solid rgba(168,85,247,0.4);
+color:white;
+}
+li{
+background:rgba(255,255,255,0.05);
+padding:12px;
+border-radius:12px;
+margin-bottom:8px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+font-size:14px;
+}
+.delete-btn{
+background:none;
+border:none;
+color:#ff4d6d;
+font-size:16px;
+margin-left:10px;
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+
+<header>
+<div class="logo">FLUY</div>
+<select id="monthSelect" class="month-select"></select>
+</header>
+
+<div class="wrapper" id="wrapper">
+
+<div class="screen">
+<div class="card">Receitas: <strong id="income">R$ 0</strong></div>
+<div class="card">Despesas: <strong id="expense">R$ 0</strong></div>
+<div class="card balance">Saldo: <strong id="balance">R$ 0</strong></div>
+
+<canvas id="chart"></canvas>
+
+<h4 style="margin-top:15px;">Transações</h4>
+<ul id="list"></ul>
+</div>
+
+<div class="screen">
+<button class="back" onclick="goHome()">←</button>
+
+<h3 id="formTitle">Nova Transação</h3>
+<p id="typeLabel"></p>
+
+<input type="number" id="value" placeholder="Valor">
+
+<div class="category-grid" id="categories"></div>
+
+<input type="date" id="date">
+
+<button class="save" onclick="saveTransaction()">Salvar</button>
+</div>
+
+</div>
+
+<button class="fab" onclick="toggleMenu()">Adicionar</button>
+
+<div class="fab-menu" id="fabMenu">
+<button class="fab-option" onclick="openForm('income')">➕ Receita</button>
+<button class="fab-option" onclick="openForm('expense')">➖ Despesa</button>
+</div>
+
+</div>
+
+<script>
+let transactions=JSON.parse(localStorage.getItem("transactions"))||[];
+let selectedType="";
+let selectedCategory="";
+let chart;
+
+const incomeCategories=["Salário","Freelance","Investimentos","Vendas","Outros"];
+const expenseCategories=["Alimentação","Transporte","Moradia","Saúde","Lazer","Educação","Outros"];
+
+const monthSelect=document.getElementById("monthSelect");
+for(let i=0;i<12;i++){
+let option=document.createElement("option");
+option.value=i;
+option.text=new Date(2025,i).toLocaleString("pt-BR",{month:"long"});
+monthSelect.appendChild(option);
+}
+monthSelect.value=new Date().getMonth();
+monthSelect.addEventListener("change",update);
+
+function toggleMenu(){
+document.getElementById("fabMenu").classList.toggle("active");
+}
+
+function openForm(type){
+selectedType=type;
+selectedCategory="";
+document.getElementById("typeLabel").innerText=
+type==="income"?"Adicionando Receita":"Adicionando Despesa";
+
+document.getElementById("fabMenu").classList.remove("active");
+loadCategories();
+goAdd();
+}
+
+function loadCategories(){
+let catDiv=document.getElementById("categories");
+catDiv.innerHTML="";
+let categories=selectedType==="income"?incomeCategories:expenseCategories;
+
+categories.forEach(cat=>{
+let btn=document.createElement("button");
+btn.className="category-btn";
+btn.innerText=cat;
+btn.onclick=()=>{
+document.querySelectorAll(".category-btn").forEach(b=>b.classList.remove("active"));
+btn.classList.add("active");
+selectedCategory=cat;
+};
+catDiv.appendChild(btn);
+});
+}
+
+function saveTransaction(){
+if(!value.value||!date.value||!selectedCategory){
+alert("Preencha todos os campos");
+return;
+}
+
+transactions.push({
+id:Date.now(),
+value:parseFloat(value.value),
+type:selectedType,
+category:selectedCategory,
+date:date.value
+});
+
+localStorage.setItem("transactions",JSON.stringify(transactions));
+
+value.value="";
+selectedCategory="";
+update();
+goHome();
+}
+
+function deleteTransaction(id){
+transactions=transactions.filter(t=>t.id!==id);
+localStorage.setItem("transactions",JSON.stringify(transactions));
+update();
+}
+
+function update(){
+let income=0;
+let expense=0;
+let list=document.getElementById("list");
+list.innerHTML="";
+let month=monthSelect.value;
+
+transactions.forEach(t=>{
+let d=new Date(t.date);
+if(d.getMonth()==month){
+if(t.type==="income") income+=t.value;
+else expense+=t.value;
+
+let li=document.createElement("li");
+li.innerHTML=`
+<div>
+<strong>${t.category}</strong><br>
+<small>${t.type==="income"?"Receita":"Despesa"}</small>
+</div>
+<div>
+R$ ${t.value.toFixed(2)}
+<button class="delete-btn" onclick="deleteTransaction(${t.id})">🗑</button>
+</div>
+`;
+list.appendChild(li);
+}
+});
+
+income.innerText="R$ "+income.toFixed(2);
+expense.innerText="R$ "+expense.toFixed(2);
+balance.innerText="R$ "+(income-expense).toFixed(2);
+
+renderChart(income,expense);
+}
+
+function renderChart(income,expense){
+if(chart) chart.destroy();
+chart=new Chart(document.getElementById("chart"),{
+type:"doughnut",
+data:{
+labels:["Receita","Despesa"],
+datasets:[{
+data:[income,expense],
+backgroundColor:["#9333ea","#000"],
+borderWidth:0
+}]
+},
+options:{plugins:{legend:{display:false}}}
+});
+}
+
+function goAdd(){wrapper.style.transform="translateX(-50%)";}
+function goHome(){wrapper.style.transform="translateX(0%)";}
+
+update();
+</script>
+
+</body>
+</html>
